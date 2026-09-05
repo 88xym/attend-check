@@ -1,13 +1,14 @@
 {
+  "_说明": "files 和 period 留空时自动扫描目录识别（推荐）。如需指定具体文件，填入文件名即可覆盖自动检测。",
   "period": {
-    "start": "2026-07-21",
-    "end": "2026-08-20"
+    "start": "",
+    "end": ""
   },
   "files": {
-    "raw": "原始记录表(20260721-20260820).xlsx",
-    "attendance": "721-820机场项目考勤.xlsx",
-    "attendance_sheet": "考勤表721-820",
-    "pdf": "20260821110253.pdf",
+    "raw": "",
+    "attendance": "",
+    "attendance_sheet": "",
+    "pdf": "",
     "aliases": "aliases.json"
   },
   "output": {
@@ -28,17 +29,5 @@
     "check_docs": true,
     "single_punch_reminder": true,
     "weekend_attendance_check": true
-  },
-  "marks": {
-    "present": "√",
-    "absent": "曠",
-    "overtime": "加",
-    "training": "培",
-    "business_trip": "差",
-    "compensatory": "補",
-    "annual": "年",
-    "personal": "事",
-    "sick": "病",
-    "other": ["其", "產", "喪", "婚"]
   }
 }

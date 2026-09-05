@@ -43,7 +43,20 @@ pip install -r requirements.txt
 python main.py
 ```
 
+**换月操作**：把新的三个源文件（原始记录.xlsx、考勤表.xlsx、单据.pdf）放到项目目录，运行 `python main.py` 即可。程序自动识别文件名和考勤周期，无需改配置。
+
 输出：`output/考勤对账差异报告_<周期开始>_<周期结束>.xlsx`
+
+## 自动检测
+
+`config.json` 中 `files` 和 `period` 留空时，程序自动扫描目录：
+
+- 含"原始记录"/"打卡"的 xlsx → 原始打卡记录
+- 含"考勤"的 xlsx → 手工考勤表（自动识别 sheet 名）
+- 目录下最新的 pdf → 单据 PDF
+- 从文件名提取周期（如 `原始记录表(20260721-20260820).xlsx` → 2026-07-21~2026-08-20）
+
+如需指定具体文件，在 `config.json` 中填入文件名即可覆盖自动检测。
 
 ## 配置说明（config.json）
 

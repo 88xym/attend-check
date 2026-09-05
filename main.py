@@ -59,14 +59,46 @@ def main() -> int:
     base = os.path.dirname(os.path.abspath(args.config))
 
     # ---- 读取配置 ----
-    period_start = parse_date(_cfg_get(cfg, "period", "start"))
-    period_end = parse_date(_cfg_get(cfg, "period", "end"))
-
     raw_file = _cfg_get(cfg, "files", "raw", default=cfg.get("raw_file", ""))
     attend_file = _cfg_get(cfg, "files", "attendance", default=cfg.get("attend_file", ""))
     attend_sheet = _cfg_get(cfg, "files", "attendance_sheet", default=cfg.get("main_sheet", ""))
     pdf_file = _cfg_get(cfg, "files", "pdf", default=cfg.get("pdf_file", ""))
     alias_file = _cfg_get(cfg, "files", "aliases", default=cfg.get("name_alias_file", "aliases.json"))
+
+    period_start = None
+    period_end = None
+    ps = _cfg_get(cfg, "period", "start")
+    pe = _cfg_get(cfg, "period", "end")
+    if ps and pe:
+        period_start = parse_date(ps)
+        period_end = parse_date(pe)
+
+    # ---- 自动检测：配置路径不存在或为空时，扫描目录 ----
+    need_detect = (
+        not raw_file or not os.path.exists(os.path.join(base, raw_file))
+        or not attend_file or not os.path.exists(os.path.join(base, attend_file))
+        or period_start is None
+    )
+    if need_detect:
+        from attend_check.auto_detect import auto_detect
+        detected = auto_detect(base)
+        if not raw_file or not os.path.exists(os.path.join(base, raw_file)):
+            raw_file = detected["raw_file"] or raw_file
+        if not attend_file or not os.path.exists(os.path.join(base, attend_file)):
+            attend_file = detected["attend_file"] or attend_file
+        if not attend_sheet:
+            attend_sheet = detected["attend_sheet"] or attend_sheet
+        if not pdf_file or not os.path.exists(os.path.join(base, pdf_file)):
+            pdf_file = detected["pdf_file"] or pdf_file
+        if period_start is None and detected["period_start"]:
+            period_start = detected["period_start"]
+            period_end = detected["period_end"]
+        print(f"[自动检测] 原始记录={raw_file or '未找到'} | 考勤表={attend_file or '未找到'} | "
+              f"PDF={pdf_file or '无'} | 周期={period_start}~{period_end}")
+
+    if period_start is None or period_end is None:
+        print("[错误] 无法确定考勤周期，请在 config.json 中配置 period，或确保文件名包含日期（如 原始记录表(20260721-20260820).xlsx）")
+        return 1
 
     out_dir = _cfg_get(cfg, "output", "dir", default=cfg.get("output_dir", "output"))
     report_template = _cfg_get(cfg, "output", "report_template",
