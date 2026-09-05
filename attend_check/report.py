@@ -98,7 +98,7 @@ def build_report(result: CheckResult, period: tuple[date, date],
 
     # ---- Sheet 4: 姓名配对 ----
     ws5 = wb.create_sheet("姓名配对")
-    heads5 = ["姓名(简体)", "配对状态", "原始记录", "考勤表", "工号", "部门"]
+    heads5 = ["姓名(简体)", "配对状态", "原始记录", "考勤表", "工号", "部门", "建议配对(相似度)"]
     ws5.append(heads5)
     _style_header(ws5, 1, len(heads5))
     rows5 = []
@@ -106,7 +106,7 @@ def build_report(result: CheckResult, period: tuple[date, date],
         for p in name_pairs:
             rows5.append(p.to_row())
     _write_rows(ws5, rows5, 2, len(heads5))
-    ws5.auto_filter.ref = f"A1:F{max(1, len(rows5) + 1)}"
+    ws5.auto_filter.ref = f"A1:G{max(1, len(rows5) + 1)}"
     _auto_width(ws5, len(heads5))
     # 配对状态着色
     for i, p in enumerate(name_pairs or [], start=2):
@@ -124,5 +124,19 @@ def build_report(result: CheckResult, period: tuple[date, date],
     ws4.auto_filter.ref = f"A1:G{max(1, len(rows4) + 1)}"
     _auto_width(ws4, len(heads))
 
-    wb.save(out_path)
-    return out_path
+    return save_with_fallback(wb, out_path)
+
+
+def save_with_fallback(wb: Workbook, out_path: str) -> str:
+    """保存工作簿；文件被占用（Excel 打开中）时自动加时间戳另存。"""
+    from datetime import datetime
+
+    try:
+        wb.save(out_path)
+        return out_path
+    except PermissionError:
+        base, ext = os.path.splitext(out_path)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        alt = f"{base}_{stamp}{ext}"
+        wb.save(alt)
+        return alt
