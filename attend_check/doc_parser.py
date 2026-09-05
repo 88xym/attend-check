@@ -218,6 +218,30 @@ def _find_name_from_lines(page: OcrPage, name_pool: list[str]) -> Optional[str]:
     return None
 
 
+def _extract_date_after_keyword(page: OcrPage, keyword: str, max_after: int = 6) -> Optional[date]:
+    """在指定关键词行之后（含同行）查找第一个日期。
+
+    用于从"加班日期"、"休假起止日期"等字段后提取实际日期，
+    避免把表头的考勤周期（如7月21日-8月20日）误当作业务日期。
+    """
+    nk = _normalize_text(keyword)
+    # 按 y 坐标排序（阅读顺序）
+    sorted_lines = sorted(page.lines, key=lambda l: (round(l.y / 15), l.x))
+    for i, line in enumerate(sorted_lines):
+        if nk in _normalize_text(line.text):
+            # 1) 同行内可能包含日期（如"加班日期 2026/7/23"）
+            dates_in_line = _extract_dates(line.text)
+            if dates_in_line:
+                return dates_in_line[0]
+            # 2) 后续 max_after 行内查找
+            for j in range(i + 1, min(i + 1 + max_after, len(sorted_lines))):
+                dates = _extract_dates(sorted_lines[j].text)
+                if dates:
+                    return dates[0]
+            break
+    return None
+
+
 def parse_page(page: OcrPage, name_pool: Optional[list[str]] = None) -> DocumentRecord:
     """解析单页 OCR 结果为单据记录。"""
     doc_type, doc_label = _detect_doc_type(page)
@@ -243,18 +267,27 @@ def parse_page(page: OcrPage, name_pool: Optional[list[str]] = None) -> Document
     if doc_type in ("leave_application", "vacation_application"):
         # 请假/休假单
         rec.leave_type, rec.leave_type_label = _detect_leave_type(page)
-        if all_dates:
-            # 假期申请表通常有开始和结束日期
-            # 过滤掉填表日期等（取与考勤周期 7/21-8/20 重叠的日期）
-            period_dates = [d for d in all_dates
-                            if date(2026, 7, 1) <= d <= date(2026, 9, 30)]
-            if len(period_dates) >= 2:
-                rec.start_date = period_dates[0]
-                rec.end_date = period_dates[-1]
-                rec.days = (rec.end_date - rec.start_date).days + 1
-            elif len(period_dates) == 1:
-                rec.start_date = rec.end_date = period_dates[0]
-                rec.days = 1
+        # 优先从"休假起止日期"字段后提取，避免误取表头周期
+        leave_dates = []
+        kw_date = _extract_date_after_keyword(page, "休假起止日期", max_after=4)
+        if kw_date:
+            leave_dates.append(kw_date)
+        # 也从全文提取，排除考勤周期日期
+        period_start = date(2026, 7, 21)
+        period_end = date(2026, 8, 20)
+        for d in all_dates:
+            if d not in (period_start, period_end) and d not in leave_dates:
+                if date(2026, 7, 1) <= d <= date(2026, 9, 30):
+                    leave_dates.append(d)
+        if len(leave_dates) >= 2:
+            rec.start_date = leave_dates[0]
+            rec.end_date = leave_dates[-1]
+            if rec.end_date < rec.start_date:
+                rec.start_date, rec.end_date = rec.end_date, rec.start_date
+            rec.days = (rec.end_date - rec.start_date).days + 1
+        elif len(leave_dates) == 1:
+            rec.start_date = rec.end_date = leave_dates[0]
+            rec.days = 1
         # 休假申请单多为手写，置信度低
         if doc_type == "vacation_application":
             rec.confidence = "low"
@@ -265,11 +298,19 @@ def parse_page(page: OcrPage, name_pool: Optional[list[str]] = None) -> Document
     elif doc_type == "overtime_application":
         # 加班申请单（打印体，解析度高）
         rec.confidence = "high"
-        if all_dates:
-            period_dates = [d for d in all_dates
-                            if date(2026, 7, 1) <= d <= date(2026, 9, 30)]
-            if period_dates:
-                rec.overtime_date = period_dates[0]
+        # 加班日期在"加班日期"字段后，不是表头的考勤周期
+        ot_date = _extract_date_after_keyword(page, "加班日期")
+        if ot_date:
+            rec.overtime_date = ot_date
+        elif all_dates:
+            # 回退：排除考勤周期（7/21、8/20）后取第一个
+            period_start = date(2026, 7, 21)
+            period_end = date(2026, 8, 20)
+            filtered = [d for d in all_dates if d not in (period_start, period_end)]
+            if filtered:
+                rec.overtime_date = filtered[0]
+            elif all_dates:
+                rec.overtime_date = all_dates[0]
         # 提取加班时间和时数
         start, end, hours = _extract_time_range(full_text)
         rec.overtime_start = start
