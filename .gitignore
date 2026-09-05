@@ -4,6 +4,10 @@
 *.csv
 *.pdf
 
+# ===== 打包产物与临时截图 =====
+*.zip
+error_screenshot.png
+
 # ===== 输出与临时文件 =====
 output/
 __pycache__/

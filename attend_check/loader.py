@@ -72,29 +72,109 @@ class MonthTotals:
 
 # ============ 加载原始打卡记录 ============
 
+# 原始记录表各列的可能表头名称（简繁兼容，宽松匹配）
+_RAW_COLUMN_ALIASES = {
+    "emp_id":   ["工号", "工號", "员工编号", "員工編號", "编号", "編號", "工号/卡号", "工號/卡號"],
+    "name":     ["姓名", "名字", "员工姓名", "員工姓名", "人员", "人員"],
+    "dept":     ["部门", "部門", "科室", "单位", "單位", "所属部门", "所屬部門", "部门名称", "部門名稱"],
+    "punch":    ["打卡时间", "打卡時間", "考勤时间", "考勤時間", "刷卡时间", "刷卡時間",
+                 "时间", "時間", "打卡日期时间", "打卡日期時間", "考勤日期时间", "考勤日期時間"],
+    "verify":   ["验证方式", "驗證方式", "验证", "驗證", "考勤方式", "打卡方式", "打卡方式"],
+}
+
+
+def _detect_raw_columns(header_row: tuple) -> dict[str, int]:
+    """从表头行自动识别各列索引。返回 {字段名: 列索引}，找不到的字段为 -1。"""
+    cols = {k: -1 for k in _RAW_COLUMN_ALIASES}
+    for idx, cell in enumerate(header_row):
+        if cell is None:
+            continue
+        text = str(cell).strip().replace(" ", "").replace("\u3000", "")
+        if not text:
+            continue
+        for field, aliases in _RAW_COLUMN_ALIASES.items():
+            if cols[field] >= 0:
+                continue
+            for alias in aliases:
+                if alias in text or text in alias:
+                    cols[field] = idx
+                    break
+    return cols
+
+
+def _safe_get(row: tuple, idx: int, default=None):
+    """安全取列，越界返回 default。"""
+    if idx < 0 or idx >= len(row):
+        return default
+    return row[idx]
+
+
 def load_raw(path: str) -> list[Punch]:
     wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
     ws = wb.active
     punches: list[Punch] = []
-    for i, row in enumerate(ws.iter_rows(values_only=True), start=1):
-        if i == 1:
-            continue  # 标题行
-        if not row or row[0] in (None, ""):
+
+    # 1. 扫描前 5 行找表头（含"姓名"和"打卡时间"类列名的行）
+    col_map = None
+    header_row_idx = 0
+    rows_iter = list(ws.iter_rows(values_only=True))
+    for i, row in enumerate(rows_iter[:10]):
+        if not row:
             continue
-        emp_id, name, dept = str(row[0]), str(row[1] or "").strip(), str(row[2] or "").strip()
-        punch_time = row[6]
+        detected = _detect_raw_columns(row)
+        if detected["name"] >= 0 and detected["punch"] >= 0:
+            col_map = detected
+            header_row_idx = i
+            break
+
+    # 兜底：如果没找到表头，用默认列索引（旧格式：A=工号 B=姓名 C=部门 G=打卡 H=验证）
+    if col_map is None:
+        col_map = {"emp_id": 0, "name": 1, "dept": 2, "punch": 6, "verify": 7}
+        header_row_idx = 0
+
+    # 2. 从表头下一行开始读数据
+    for row in rows_iter[header_row_idx + 1:]:
+        if not row:
+            continue
+        name = str(_safe_get(row, col_map["name"], "") or "").strip()
+        if not name:
+            continue
+        emp_id = str(_safe_get(row, col_map["emp_id"], "") or "").strip()
+        dept = str(_safe_get(row, col_map["dept"], "") or "").strip()
+        punch_time = _safe_get(row, col_map["punch"])
+        verify = str(_safe_get(row, col_map["verify"], "") or "")
+
+        # 解析打卡时间（支持 datetime、字符串多种格式）
         if isinstance(punch_time, str):
-            try:
-                punch_time = datetime.fromisoformat(punch_time)
-            except ValueError:
-                continue
+            punch_time = _parse_datetime_str(punch_time)
         if not isinstance(punch_time, datetime):
             continue
-        verify = str(row[7] or "")
+
         punches.append(Punch(emp_id=emp_id, name=name, dept=dept,
                              punch_time=punch_time, verify=verify))
     wb.close()
     return punches
+
+
+def _parse_datetime_str(s: str):
+    """尝试多种格式解析日期时间字符串，失败返回 None。"""
+    s = s.strip()
+    if not s:
+        return None
+    # ISO 格式
+    try:
+        return datetime.fromisoformat(s)
+    except (ValueError, TypeError):
+        pass
+    # 常见格式
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M",
+                "%Y/%m/%d %H:%M", "%Y-%m-%d", "%Y/%m/%d", "%Y年%m月%d日 %H:%M:%S",
+                "%Y年%m月%d日 %H:%M", "%Y年%m月%d日"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
 
 
 # ============ 加载手工考勤表 ============
