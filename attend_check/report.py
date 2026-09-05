@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from .rules import CheckResult, Diff
+from .rules import CheckResult, Diff, NamePair
 
 _HDR_FILL = PatternFill("solid", fgColor="D9E2F3")
 _HARD_FILL = PatternFill("solid", fgColor="FDE9E9")   # 红底
@@ -53,7 +53,7 @@ def _auto_width(ws, ncols: int, min_w: int = 10, max_w: int = 40):
 
 
 def build_report(result: CheckResult, period: tuple[date, date],
-                 out_path: str) -> str:
+                 out_path: str, name_pairs: list[NamePair] | None = None) -> str:
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     wb = Workbook()
 
@@ -96,7 +96,26 @@ def build_report(result: CheckResult, period: tuple[date, date],
     ws3.auto_filter.ref = f"A1:G{max(1, len(rows3) + 1)}"
     _auto_width(ws3, len(heads))
 
-    # ---- Sheet 4: 全部差异 ----
+    # ---- Sheet 4: 姓名配对 ----
+    ws5 = wb.create_sheet("姓名配对")
+    heads5 = ["姓名(简体)", "配对状态", "原始记录", "考勤表", "工号", "部门"]
+    ws5.append(heads5)
+    _style_header(ws5, 1, len(heads5))
+    rows5 = []
+    if name_pairs:
+        for p in name_pairs:
+            rows5.append(p.to_row())
+    _write_rows(ws5, rows5, 2, len(heads5))
+    ws5.auto_filter.ref = f"A1:F{max(1, len(rows5) + 1)}"
+    _auto_width(ws5, len(heads5))
+    # 配对状态着色
+    for i, p in enumerate(name_pairs or [], start=2):
+        if p.status == "仅考勤表":
+            ws5.cell(row=i, column=2).fill = PatternFill("solid", fgColor="FDE9E9")
+        elif p.status == "仅原始记录":
+            ws5.cell(row=i, column=2).fill = PatternFill("solid", fgColor="FFF6E0")
+
+    # ---- Sheet 5: 全部差异 ----
     ws4 = wb.create_sheet("全部差异")
     ws4.append(heads)
     _style_header(ws4, 1, len(heads))

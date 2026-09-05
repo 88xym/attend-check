@@ -18,7 +18,8 @@ from datetime import date, datetime
 from attend_check.loader import load_attendance, load_raw
 from attend_check.name_map import NameMapper
 from attend_check.report import build_report
-from attend_check.rules import CheckResult, build_punch_index, check_presence, check_totals
+from attend_check.rules import (CheckResult, build_punch_index, check_name_matching,
+                                check_presence, check_totals)
 
 
 def load_config(path: str) -> dict:
@@ -50,14 +51,27 @@ def main() -> int:
     print(f"      共 {len(punches)} 条打卡记录")
 
     print(f"[2/4] 解析手工考勤表: {attend_path} [{cfg['main_sheet']}]")
-    table = load_attendance(attend_path, cfg["main_sheet"], period_start, period_end)
+    mapper = NameMapper(os.path.join(base, cfg.get("name_alias_file", "aliases.json")))
+    table = load_attendance(attend_path, cfg["main_sheet"], period_start, period_end,
+                            name_normalize=mapper.normalize)
     print(f"      员工 {len(table.days)} 人，日期 {len(table.dates())} 天")
     if table.extra_rows:
         print(f"      表尾非员工行（已跳过）: {table.extra_rows}")
 
-    print("[3/4] 执行对账规则")
-    mapper = NameMapper(os.path.join(base, cfg.get("name_alias_file", "aliases.json")))
+    print("[3/4] 执行对账规则（含姓名配对核对）")
     punch_idx = build_punch_index(punches, mapper)
+    name_pairs = check_name_matching(punches, mapper, set(table.days))
+    n_ok = sum(1 for p in name_pairs if p.status == "已配对")
+    n_only_att = sum(1 for p in name_pairs if p.status == "仅考勤表")
+    n_only_raw = sum(1 for p in name_pairs if p.status == "仅原始记录")
+    print(f"      姓名配对: 已配对 {n_ok}，仅考勤表 {n_only_att}，仅原始记录 {n_only_raw}")
+    if n_only_att:
+        print(f"        仅考勤表（考勤表有人但无打卡记录）: "
+              f"{[p.name for p in name_pairs if p.status == '仅考勤表']}")
+    if n_only_raw:
+        print(f"        仅原始记录（有打卡但不在考勤表主表）: "
+              f"{[p.name for p in name_pairs if p.status == '仅原始记录']}")
+
     result = CheckResult()
     for d in check_presence(punch_idx, table, mapper):
         result.add(d)
@@ -65,7 +79,7 @@ def main() -> int:
         result.add(d)
 
     print("[4/4] 生成差异报告")
-    path = build_report(result, (period_start, period_end), out_path)
+    path = build_report(result, (period_start, period_end), out_path, name_pairs=name_pairs)
     by_level = result.by_level()
     print(f"\n=== 完成 ===")
     print(f"差异总数: {len(result.diffs)}")
