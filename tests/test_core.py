@@ -108,10 +108,10 @@ class TestLeaveGrouping(unittest.TestCase):
     def test_chan_sang_hun_into_qi(self):
         t = AttendanceTable(date(2026, 8, 1), date(2026, 8, 31))
         t.date_cols = {4: date(2026, 8, 3)}  # 周一
-        t.days["李四"] = {date(2026, 8, 3): DayRecord(mark_up="產", mark_down="產")}
+        t.days["李四"] = {date(2026, 8, 3): DayRecord(mark_up="产", mark_down="产")}
         t.totals["李四"] = MonthTotals(name="李四", other_d=1.0)  # 其（d)=1
         diffs = check_totals(t)
-        # 產 标记 2 个 × 0.5 = 1 天，与月度"其"=1 一致 -> 无差异
+        # 产 标记 2 个 × 0.5 = 1 天，与月度"其"=1 一致 -> 无差异
         self.assertEqual(diffs, [])
 
 
