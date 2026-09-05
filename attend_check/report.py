@@ -53,7 +53,8 @@ def _auto_width(ws, ncols: int, min_w: int = 10, max_w: int = 40):
 
 
 def build_report(result: CheckResult, period: tuple[date, date],
-                 out_path: str, name_pairs: list[NamePair] | None = None) -> str:
+                 out_path: str, name_pairs: list[NamePair] | None = None,
+                 doc_records: list | None = None) -> str:
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     wb = Workbook()
 
@@ -62,7 +63,7 @@ def build_report(result: CheckResult, period: tuple[date, date],
     ws.title = "差异汇总"
     by_level = result.by_level()
     by_cat = result.by_category()
-    ws.append(["考勤对账差异汇总（阶段一：原始打卡 × 手工考勤表）"])
+    ws.append(["考勤对账差异汇总（阶段二：原始打卡 × 手工考勤表 × PDF单据）"])
     ws.append([f"对账周期：{period[0].isoformat()} ~ {period[1].isoformat()}"])
     ws.append([f"差异总数：{len(result.diffs)}（硬错误 {by_level.get('硬错误', 0)}，可疑项 {by_level.get('可疑项', 0)}）"])
     ws.append([])
@@ -115,7 +116,47 @@ def build_report(result: CheckResult, period: tuple[date, date],
         elif p.status == "仅原始记录":
             ws5.cell(row=i, column=2).fill = PatternFill("solid", fgColor="FFF6E0")
 
-    # ---- Sheet 5: 全部差异 ----
+    # ---- Sheet 5: 单据核对明细 ----
+    ws_doc = wb.create_sheet("单据核对明细")
+    heads_doc = ["类别", "姓名", "日期", "级别", "原始记录", "考勤表记录", "差异说明"]
+    ws_doc.append(heads_doc)
+    _style_header(ws_doc, 1, len(heads_doc))
+    rows_doc = [d.to_row() for d in result.diffs if d.category == "单据核对"]
+    _write_rows(ws_doc, rows_doc, 2, len(heads_doc), level_col=4)
+    ws_doc.auto_filter.ref = f"A1:G{max(1, len(rows_doc) + 1)}"
+    _auto_width(ws_doc, len(heads_doc))
+
+    # ---- Sheet 6: 单据清单 ----
+    ws_list = wb.create_sheet("单据清单")
+    heads_list = ["页码", "单据类型", "员工", "部门", "假期/加班类型", "开始日期", "结束日期",
+                  "天数", "加班日期", "加班时间", "加班时数", "置信度", "备注"]
+    ws_list.append(heads_list)
+    _style_header(ws_list, 1, len(heads_list))
+    rows_list = []
+    if doc_records:
+        for r in doc_records:
+            rows_list.append([
+                r.page_num, r.doc_type_label, r.employee_name or "", r.department or "",
+                r.leave_type_label or "",
+                r.start_date.isoformat() if r.start_date else "",
+                r.end_date.isoformat() if r.end_date else "",
+                r.days if r.days is not None else "",
+                r.overtime_date.isoformat() if r.overtime_date else "",
+                f"{r.overtime_start or ''}~{r.overtime_end or ''}" if r.overtime_start else "",
+                r.overtime_hours if r.overtime_hours is not None else "",
+                r.confidence, r.notes,
+            ])
+    _write_rows(ws_list, rows_list, 2, len(heads_list))
+    ws_list.auto_filter.ref = f"A1:M{max(1, len(rows_list) + 1)}"
+    _auto_width(ws_list, len(heads_list))
+    # 置信度着色
+    for i, r in enumerate(doc_records or [], start=2):
+        if r.confidence == "low":
+            ws_list.cell(row=i, column=12).fill = PatternFill("solid", fgColor="FDE9E9")
+        elif r.confidence == "medium":
+            ws_list.cell(row=i, column=12).fill = PatternFill("solid", fgColor="FFF6E0")
+
+    # ---- Sheet 7: 全部差异 ----
     ws4 = wb.create_sheet("全部差异")
     ws4.append(heads)
     _style_header(ws4, 1, len(heads))

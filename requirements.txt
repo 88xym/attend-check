@@ -1,2 +1,6 @@
 openpyxl>=3.1
 opencc-python-reimplemented>=0.1.7
+pymupdf>=1.23
+rapidocr-onnxruntime>=1.2
+Pillow>=9.0
+numpy>=1.20
