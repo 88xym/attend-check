@@ -57,7 +57,7 @@ class CheckResult:
 
 
 # 假期类标记（有打卡时同时出现这类标记 = 半日假，属正常，不报差异）
-_LEAVE_MARKS = {"補", "年", "病", "事", "培", "差", "其", "曠", "產", "喪", "婚"}
+_LEAVE_MARKS = {"补", "年", "病", "事", "培", "差", "其", "旷", "产", "丧", "婚"}
 
 
 def build_punch_index(punches: list[Punch], mapper: NameMapper) -> dict[str, dict[date, list[datetime]]]:
@@ -197,8 +197,8 @@ def check_totals(table: AttendanceTable) -> list[Diff]:
         for d, rec in table.days[name].items():
             for mk in (rec.mark_up, rec.mark_down):
                 if mk in _LEAVE_MARKS:
-                    # 產/喪/婚 属"其他假期（其）"子类，计入"其（d)"列
-                    if mk in ("產", "喪", "婚"):
+                    # 产/丧/婚 属"其他假期（其）"子类，计入"其（d)"列
+                    if mk in ("产", "丧", "婚"):
                         leave_cnt["其"] += 0.5
                     else:
                         leave_cnt[mk] += 0.5
@@ -219,12 +219,12 @@ def check_totals(table: AttendanceTable) -> list[Diff]:
         pairs = [
             ("培", leave_cnt["培"], tot.train_d, "培（d)"),
             ("差", leave_cnt["差"], tot.travel_d, "差（d)"),
-            ("補", leave_cnt["補"], tot.comp_d, "補(d)"),
+            ("补", leave_cnt["补"], tot.comp_d, "補(d)"),
             ("年", leave_cnt["年"], tot.annual_d, "年（d)"),
             ("病", leave_cnt["病"], tot.sick_d, "病（d)"),
             ("事", leave_cnt["事"], tot.personal_d, "事（d)"),
             ("其", leave_cnt["其"], tot.other_d, "其（d)"),
-            ("曠", leave_cnt["曠"], tot.absent_d, "曠（d)"),
+            ("旷", leave_cnt["旷"], tot.absent_d, "曠（d)"),
             ("超時工作", ot_sum, tot.overtime_h, "超時工作（h)"),
             ("休息日上班", restday_sum, tot.restday_h, "休息日上班（h)"),
             ("週六公眾假期上班", weekend_holiday_sum, tot.weekend_holiday_h, "週六、公眾假期上班（h)"),

@@ -10,6 +10,8 @@ from __future__ import annotations
 import calendar
 from dataclasses import dataclass, field
 from datetime import date, datetime
+
+from .name_map import to_simplified
 from typing import Iterable
 
 import openpyxl
@@ -218,8 +220,8 @@ def load_attendance(path: str, sheet_name: str,
             v_down = block[1][pos]
             v_ot = block[2][pos]
             v_night = block[3][pos]
-            rec.mark_up = "" if v_up is None else str(v_up).strip()
-            rec.mark_down = "" if v_down is None else str(v_down).strip()
+            rec.mark_up = "" if v_up is None else to_simplified(str(v_up).strip())
+            rec.mark_down = "" if v_down is None else to_simplified(str(v_down).strip())
             rec.overtime_h = _to_float(v_ot)
             rec.night_h = _to_float(v_night)
             rec.h_up = _to_float(v_up) if isinstance(v_up, (int, float)) else 0.0
