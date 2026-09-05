@@ -218,7 +218,8 @@ def main() -> int:
             pages = ocr.ocr_all(force=args.reocr, progress_cb=_progress)
 
         name_pool = list(table.days) + [p.name for p in name_pairs]
-        doc_records = parse_all(pages, name_pool=name_pool)
+        doc_records = parse_all(pages, name_pool=name_pool,
+                                period=(period_start, period_end))
 
         type_count = {}
         for r in doc_records:

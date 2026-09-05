@@ -42,19 +42,19 @@ def _is_raw_punch_file(path: str) -> bool:
 
 
 def _is_attendance_sheet(path: str) -> bool:
-    """通过内容判断是否为手工考勤表（含上/下/加/夜間工作行标签）。"""
+    """通过内容判断是否为手工考勤表（含上/下/加/夜間工作行标签，简繁兼容）。"""
     try:
         import openpyxl
         wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        labels = {"上", "下", "加", "夜間工作", "夜间工作", "夜間", "夜间"}
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
-            # 读前 30 行的 B 列（姓名/标签列）
+            # 读前 30 行的 B/C 列（姓名/标签列）
             for row in ws.iter_rows(min_row=1, max_row=30, min_col=2, max_col=3, values_only=True):
                 for cell in row:
-                    if cell and isinstance(cell, str):
-                        if cell.strip() in ("上", "下", "加", "夜間工作", "夜间工作"):
-                            wb.close()
-                            return True
+                    if cell and isinstance(cell, str) and cell.strip() in labels:
+                        wb.close()
+                        return True
         wb.close()
     except Exception:
         pass

@@ -132,10 +132,11 @@ class AttendanceTable:
 
 
 def _is_person_row(name: str) -> bool:
-    """过滤表尾的 備註/考勤員 等非员工行。"""
+    """过滤表尾的 備註/考勤員 等非员工行（简繁兼容）。"""
     if not name:
         return False
-    if any(k in name for k in ("備註", "考勤員", "部門負責", "主管領導", "：")):
+    if any(k in name for k in ("備註", "备注", "考勤員", "考勤员", "部門負責", "部门负责",
+                                "主管領導", "主管领导", "：", ":")):
         return False
     return len(name) <= 4  # 姓名通常 2~4 字
 
@@ -155,12 +156,12 @@ def load_attendance(path: str, sheet_name: str,
         name_normalize = lambda s: s
     table = AttendanceTable(period_start, period_end)
 
-    # 1. 定位表头（含“序號”和日期序列的行）
+    # 1. 定位表头（含"序號/序号"和日期序列的行）
     header_row = None
     date_cols: dict[int, date] = {}
     for r in range(1, min(ws.max_row, 12) + 1):
         vals = [c.value for c in ws[r]]
-        if any(v == "序號" for v in vals):
+        if any(v in ("序號", "序号") for v in vals):
             header_row = r
             for ci, v in enumerate(vals):
                 if isinstance(v, datetime):
@@ -176,11 +177,11 @@ def load_attendance(path: str, sheet_name: str,
         raise ValueError(f"未在 {sheet_name} 找到日期表头，请检查表结构")
     table.date_cols = date_cols
 
-    # 2. 定位“月度累计”起始列（表头行中值为“月度累计”的列）
+    # 2. 定位"月度累计"起始列（表头行中值为"月度累计/月度纍計"的列）
     hdr = [c.value for c in ws[header_row]]
     total_start = None
     for ci, v in enumerate(hdr):
-        if v == "月度累计":
+        if v in ("月度累计", "月度纍計"):
             total_start = ci
             break
     if total_start is None:

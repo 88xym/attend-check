@@ -59,6 +59,14 @@ class CheckResult:
 # 假期类标记（有打卡时同时出现这类标记 = 半日假，属正常，不报差异）
 _LEAVE_MARKS = {"补", "年", "病", "事", "培", "差", "其", "旷", "产", "丧", "婚"}
 
+# 出勤标记（支持多种对勾符号变体）
+_PRESENT_MARKS = {"√", "✓", "✔", "✕", "V", "v", "对", "对勾"}
+
+
+def _is_present_mark(mark: str) -> bool:
+    """判断是否为出勤标记（支持多种对勾符号变体）。"""
+    return mark in _PRESENT_MARKS
+
 
 def build_punch_index(punches: list[Punch], mapper: NameMapper) -> dict[str, dict[date, list[datetime]]]:
     """原始打卡 -> {归一化姓名: {日期: [打卡时间, ...]}}。"""
@@ -111,8 +119,8 @@ def check_presence(punch_idx: dict, table: AttendanceTable, mapper: NameMapper) 
                 continue
 
             # A2: 无打卡但"上/下"行标了出勤√ -> 多记/代打卡嫌疑
-            up_is_check = rec.mark_up == "√"
-            down_is_check = rec.mark_down == "√"
+            up_is_check = _is_present_mark(rec.mark_up)
+            down_is_check = _is_present_mark(rec.mark_down)
             if (not has_punch) and (up_is_check or down_is_check):
                 diffs.append(Diff(
                     category="到场核对", name=name, on_date=d, level=LV_HARD,
@@ -202,7 +210,7 @@ def check_totals(table: AttendanceTable) -> list[Diff]:
                         leave_cnt["其"] += 0.5
                     else:
                         leave_cnt[mk] += 0.5
-            if rec.mark_up == "√" or rec.mark_down == "√":
+            if _is_present_mark(rec.mark_up) or _is_present_mark(rec.mark_down):
                 check_days += 1
             ot_sum += rec.overtime_h
             night_sum += rec.night_h

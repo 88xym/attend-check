@@ -68,7 +68,12 @@ class PdfOcr:
         self.pdf_path = pdf_path
         self.dpi = dpi
         if cache_path is None:
-            cache_path = os.path.splitext(pdf_path)[0] + "_ocr_cache.json"
+            # 默认缓存写到 output 目录，避免污染源文件目录
+            pdf_dir = os.path.dirname(os.path.abspath(pdf_path))
+            pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
+            out_dir = os.path.join(os.path.dirname(pdf_dir), "output")
+            os.makedirs(out_dir, exist_ok=True)
+            cache_path = os.path.join(out_dir, f"{pdf_name}_ocr_cache.json")
         self.cache_path = cache_path
         self._cache: dict[int, OcrPage] = {}
         self._load_cache()
