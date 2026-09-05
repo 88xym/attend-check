@@ -77,7 +77,13 @@ def _has_any_mark(rec: DayRecord) -> bool:
 
 
 def check_presence(punch_idx: dict, table: AttendanceTable, mapper: NameMapper) -> list[Diff]:
-    """规则组 A：到场核对。"""
+    """规则组 A：到场核对。
+
+    考勤规则口径（依据用户确认）：
+    - 周一至周五：全天上班，出勤记 √
+    - 周六：上午半天班，出勤记 √（单次打卡属正常，不报缺卡）
+    - 周日：休息日，出勤需有"休息日上班"数字佐证
+    """
     diffs: list[Diff] = []
     all_dates = set(table.dates())
     for name in sorted(table.days):
@@ -89,6 +95,7 @@ def check_presence(punch_idx: dict, table: AttendanceTable, mapper: NameMapper) 
             punches = punch_days.get(d, [])
             has_punch = len(punches) > 0
             mark_present = _has_any_mark(rec)
+            wd = d.weekday()  # 5=周六, 6=周日
 
             # A1: 有打卡但考勤表当天完全无任何记录 -> 漏记
             if has_punch and not mark_present:
@@ -103,7 +110,7 @@ def check_presence(punch_idx: dict, table: AttendanceTable, mapper: NameMapper) 
                 ))
                 continue
 
-            # A2: 无打卡但“上/下”行标了出勤√ -> 多记/代打卡嫌疑
+            # A2: 无打卡但"上/下"行标了出勤√ -> 多记/代打卡嫌疑
             up_is_check = rec.mark_up == "√"
             down_is_check = rec.mark_down == "√"
             if (not has_punch) and (up_is_check or down_is_check):
@@ -132,13 +139,33 @@ def check_presence(punch_idx: dict, table: AttendanceTable, mapper: NameMapper) 
                     detail="标记了假期但无打卡，阶段二需与 PDF 请假单据核对",
                 ))
 
-            # A5: 当天仅有 1 次打卡 -> 缺一次卡（早退/晚到缺卡）
-            if has_punch and len(punches) == 1:
+            # A5: 缺卡提醒 —— 周一至周五当天仅 1 次打卡（周六半天班豁免）
+            if has_punch and len(punches) == 1 and wd != 5:
                 diffs.append(Diff(
                     category="缺卡提醒", name=name, on_date=d, level=LV_SUSPECT,
                     raw_desc=f"仅 1 次打卡（{_fmt_time(punches[0])}）",
                     attend_desc=f"上={rec.mark_up or '-'} 下={rec.mark_down or '-'}",
                     detail="当天只有一次打卡，疑似缺一次卡，请核对",
+                ))
+
+            # A6: 周日出勤核对 —— 周日为休息日，出勤√需有休息日上班数字佐证
+            if wd == 6 and (up_is_check or down_is_check) and (rec.h_up + rec.h_down) == 0:
+                if has_punch:
+                    diffs.append(Diff(
+                        category="周日出勤核对", name=name, on_date=d, level=LV_SUSPECT,
+                        raw_desc=f"打卡 {len(punches)} 次（{_fmt_time(punches[0])}~{_fmt_time(punches[-1])}）",
+                        attend_desc=f"上={rec.mark_up or '-'} 下={rec.mark_down or '-'}",
+                        detail="周日为休息日，标记出勤√但无休息日上班(数字)记录，需确认",
+                    ))
+
+            # A7: 周六出勤核对 —— 周六上午半天班，应有上午时段(6:00~13:59)打卡
+            if wd == 5 and (up_is_check or down_is_check) and has_punch \
+                    and not any(6 <= p.hour < 14 for p in punches):
+                diffs.append(Diff(
+                    category="周六出勤核对", name=name, on_date=d, level=LV_SUSPECT,
+                    raw_desc=f"打卡 {len(punches)} 次（{_fmt_time(punches[0])}~{_fmt_time(punches[-1])}）",
+                    attend_desc=f"上={rec.mark_up or '-'} 下={rec.mark_down or '-'}",
+                    detail="周六为上午半天班，出勤√但无上午时段打卡，需确认",
                 ))
     return diffs
 
@@ -170,7 +197,11 @@ def check_totals(table: AttendanceTable) -> list[Diff]:
         for d, rec in table.days[name].items():
             for mk in (rec.mark_up, rec.mark_down):
                 if mk in _LEAVE_MARKS:
-                    leave_cnt[mk] += 0.5  # 半天
+                    # 產/喪/婚 属"其他假期（其）"子类，计入"其（d)"列
+                    if mk in ("產", "喪", "婚"):
+                        leave_cnt["其"] += 0.5
+                    else:
+                        leave_cnt[mk] += 0.5
             if rec.mark_up == "√" or rec.mark_down == "√":
                 check_days += 1
             ot_sum += rec.overtime_h
