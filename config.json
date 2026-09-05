@@ -3,10 +3,42 @@
     "start": "2026-07-21",
     "end": "2026-08-20"
   },
-  "raw_file": "原始记录表(20260721-20260820).xlsx",
-  "attend_file": "721-820机场项目考勤.xlsx",
-  "pdf_file": "20260821110253.pdf",
-  "main_sheet": "考勤表721-820",
-  "output_dir": "output",
-  "name_alias_file": "aliases.json"
+  "files": {
+    "raw": "原始记录表(20260721-20260820).xlsx",
+    "attendance": "721-820机场项目考勤.xlsx",
+    "attendance_sheet": "考勤表721-820",
+    "pdf": "20260821110253.pdf",
+    "aliases": "aliases.json"
+  },
+  "output": {
+    "dir": "output",
+    "report_template": "考勤对账差异报告_{start}_{end}.xlsx"
+  },
+  "ocr": {
+    "enabled": true,
+    "dpi": 200,
+    "cache_file": "pdf_ocr_cache.json"
+  },
+  "rules": {
+    "workdays": [1, 2, 3, 4, 5],
+    "saturday_half_day": true,
+    "sunday_rest": true,
+    "check_presence": true,
+    "check_totals": true,
+    "check_docs": true,
+    "single_punch_reminder": true,
+    "weekend_attendance_check": true
+  },
+  "marks": {
+    "present": "√",
+    "absent": "曠",
+    "overtime": "加",
+    "training": "培",
+    "business_trip": "差",
+    "compensatory": "補",
+    "annual": "年",
+    "personal": "事",
+    "sick": "病",
+    "other": ["其", "產", "喪", "婚"]
+  }
 }
