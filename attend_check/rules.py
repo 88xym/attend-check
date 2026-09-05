@@ -246,6 +246,7 @@ class NamePair:
     in_attend: bool      # 考勤表是否有
     emp_ids: list = field(default_factory=list)   # 原始记录中的工号
     depts: list = field(default_factory=list)     # 原始记录中的部门
+    suggest: list = field(default_factory=list)   # 模糊配对建议 [(候选, 归一化, 相似度)]
 
     @property
     def status(self) -> str:
@@ -256,11 +257,13 @@ class NamePair:
         return "仅原始记录"
 
     def to_row(self) -> list:
+        suggest_str = "；".join(f"{c}({s:.2f})" for c, _, s in self.suggest)
         return [self.name, self.status,
                 "√" if self.in_raw else "-",
                 "√" if self.in_attend else "-",
                 "/".join(sorted(set(self.emp_ids))),
-                "/".join(sorted(set(self.depts)))]
+                "/".join(sorted(set(self.depts))),
+                suggest_str]
 
 
 def check_name_matching(raw_punches: list[Punch], mapper: NameMapper,
@@ -270,14 +273,24 @@ def check_name_matching(raw_punches: list[Punch], mapper: NameMapper,
     返回全部归一化姓名及其配对状态，用于发现：
     - 仅考勤表：考勤表有此人但设备无打卡（可能漏打卡/代打卡/未参与考勤）
     - 仅原始记录：有打卡记录但不在考勤表主表（可能漏登记/单独成表/别名未映射）
+    对未配对的人自动给出模糊配对建议，便于快速处理新人员的简繁/别名问题。
     """
     raw_info: dict[str, NamePair] = {}
+    raw_names_all: list[str] = []      # 原始记录原始写法（用于建议）
     for p in raw_punches:
         nm = mapper.normalize(p.name)
+        if p.name not in raw_names_all:
+            raw_names_all.append(p.name)
         pair = raw_info.setdefault(nm, NamePair(name=nm, in_raw=True, in_attend=nm in attend_names))
         pair.emp_ids.append(p.emp_id)
         pair.depts.append(p.dept)
     for nm in attend_names:
         if nm not in raw_info:
             raw_info[nm] = NamePair(name=nm, in_raw=False, in_attend=True)
+    for nm in raw_info:
+        p = raw_info[nm]
+        if not p.in_attend:  # 仅原始记录：从考勤表名单找建议
+            p.suggest = mapper.suggest_match(nm, sorted(attend_names))
+        elif not p.in_raw:   # 仅考勤表：从原始记录名单找建议
+            p.suggest = mapper.suggest_match(nm, raw_names_all)
     return sorted(raw_info.values(), key=lambda x: (x.status != "已配对", x.name))
