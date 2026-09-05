@@ -1,5 +1,6 @@
 {
-  "_说明": "files 和 period 留空时自动扫描目录识别（推荐）。如需指定具体文件，填入文件名即可覆盖自动检测。",
+  "_说明": "把三个源文件放到 inputfile/ 目录即可，程序自动识别（支持随意命名）。files 和 period 留空时自动检测。",
+  "input_dir": "inputfile",
   "period": {
     "start": "",
     "end": ""

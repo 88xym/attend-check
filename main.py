@@ -58,6 +58,12 @@ def main() -> int:
     cfg = load_config(args.config)
     base = os.path.dirname(os.path.abspath(args.config))
 
+    # 输入文件目录（默认 inputfile，不存在则回退到项目根目录）
+    input_dir = _cfg_get(cfg, "input_dir", default="inputfile")
+    input_path = os.path.join(base, input_dir)
+    if not os.path.isdir(input_path):
+        input_path = base
+
     # ---- 读取配置 ----
     raw_file = _cfg_get(cfg, "files", "raw", default=cfg.get("raw_file", ""))
     attend_file = _cfg_get(cfg, "files", "attendance", default=cfg.get("attend_file", ""))
@@ -73,31 +79,32 @@ def main() -> int:
         period_start = parse_date(ps)
         period_end = parse_date(pe)
 
-    # ---- 自动检测：配置路径不存在或为空时，扫描目录 ----
+    # ---- 自动检测：配置路径不存在或为空时，扫描 input 目录 ----
+    def _exists(f):
+        return bool(f) and os.path.exists(os.path.join(input_path, f))
     need_detect = (
-        not raw_file or not os.path.exists(os.path.join(base, raw_file))
-        or not attend_file or not os.path.exists(os.path.join(base, attend_file))
-        or period_start is None
+        not _exists(raw_file) or not _exists(attend_file) or period_start is None
     )
     if need_detect:
         from attend_check.auto_detect import auto_detect
-        detected = auto_detect(base)
-        if not raw_file or not os.path.exists(os.path.join(base, raw_file)):
+        detected = auto_detect(input_path)
+        if not _exists(raw_file):
             raw_file = detected["raw_file"] or raw_file
-        if not attend_file or not os.path.exists(os.path.join(base, attend_file)):
+        if not _exists(attend_file):
             attend_file = detected["attend_file"] or attend_file
         if not attend_sheet:
             attend_sheet = detected["attend_sheet"] or attend_sheet
-        if not pdf_file or not os.path.exists(os.path.join(base, pdf_file)):
+        if not _exists(pdf_file):
             pdf_file = detected["pdf_file"] or pdf_file
         if period_start is None and detected["period_start"]:
             period_start = detected["period_start"]
             period_end = detected["period_end"]
-        print(f"[自动检测] 原始记录={raw_file or '未找到'} | 考勤表={attend_file or '未找到'} | "
-              f"PDF={pdf_file or '无'} | 周期={period_start}~{period_end}")
+        print(f"[自动检测] 目录={input_dir} | 原始记录={raw_file or '未找到'} | "
+              f"考勤表={attend_file or '未找到'} | PDF={pdf_file or '无'} | "
+              f"周期={period_start}~{period_end}")
 
     if period_start is None or period_end is None:
-        print("[错误] 无法确定考勤周期，请在 config.json 中配置 period，或确保文件名包含日期（如 原始记录表(20260721-20260820).xlsx）")
+        print("[错误] 无法确定考勤周期，请在 config.json 中配置 period，或确保文件名包含日期")
         return 1
 
     out_dir = _cfg_get(cfg, "output", "dir", default=cfg.get("output_dir", "output"))
@@ -114,9 +121,9 @@ def main() -> int:
     check_docs = rules.get("check_docs", True) and not args.no_docs
 
     # ---- 路径解析 ----
-    raw_path = os.path.join(base, raw_file)
-    attend_path = os.path.join(base, attend_file)
-    pdf_path = os.path.join(base, pdf_file) if pdf_file else ""
+    raw_path = os.path.join(input_path, raw_file)
+    attend_path = os.path.join(input_path, attend_file)
+    pdf_path = os.path.join(input_path, pdf_file) if pdf_file else ""
     alias_path = os.path.join(base, alias_file)
     out_dir_path = os.path.join(base, out_dir)
     os.makedirs(out_dir_path, exist_ok=True)
