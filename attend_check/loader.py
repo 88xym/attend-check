@@ -139,10 +139,18 @@ def _is_person_row(name: str) -> bool:
 
 
 def load_attendance(path: str, sheet_name: str,
-                    period_start: date, period_end: date) -> AttendanceTable:
+                    period_start: date, period_end: date,
+                    name_normalize=None) -> AttendanceTable:
+    """解析手工考勤表主表。
+
+    name_normalize: 可选的姓名归一化函数（如 NameMapper.normalize），
+    用于把考勤表的繁体姓名统一为简体，与原始打卡记录配对。
+    """
     # 考勤表较小（约 150 行），用普通模式加载以支持高效的 ws.cell() 随机访问
     wb = openpyxl.load_workbook(path, data_only=True, read_only=False)
     ws = wb[sheet_name]
+    if name_normalize is None:
+        name_normalize = lambda s: s
     table = AttendanceTable(period_start, period_end)
 
     # 1. 定位表头（含“序號”和日期序列的行）
@@ -196,6 +204,7 @@ def load_attendance(path: str, sheet_name: str,
             r += 1
             continue
         name = str(b_name).strip()
+        name = name_normalize(name)  # 姓名统一简体，便于与原始记录配对
 
         block = {}
         for k in range(4):

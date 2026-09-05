@@ -233,3 +233,51 @@ def _fmt_time(t: datetime) -> str:
 
 def _num(v: float) -> str:
     return f"{v:g}"
+
+
+# ============ 姓名配对核对 ============
+
+@dataclass
+class NamePair:
+    """一个姓名在两侧的配对状态。"""
+
+    name: str            # 归一化后的简体姓名
+    in_raw: bool         # 原始打卡记录是否有
+    in_attend: bool      # 考勤表是否有
+    emp_ids: list = field(default_factory=list)   # 原始记录中的工号
+    depts: list = field(default_factory=list)     # 原始记录中的部门
+
+    @property
+    def status(self) -> str:
+        if self.in_raw and self.in_attend:
+            return "已配对"
+        if self.in_attend:
+            return "仅考勤表"
+        return "仅原始记录"
+
+    def to_row(self) -> list:
+        return [self.name, self.status,
+                "√" if self.in_raw else "-",
+                "√" if self.in_attend else "-",
+                "/".join(sorted(set(self.emp_ids))),
+                "/".join(sorted(set(self.depts)))]
+
+
+def check_name_matching(raw_punches: list[Punch], mapper: NameMapper,
+                        attend_names: set[str]) -> list[NamePair]:
+    """姓名配对核对：原始打卡记录与考勤表的姓名（归一化简体）是否一一对应。
+
+    返回全部归一化姓名及其配对状态，用于发现：
+    - 仅考勤表：考勤表有此人但设备无打卡（可能漏打卡/代打卡/未参与考勤）
+    - 仅原始记录：有打卡记录但不在考勤表主表（可能漏登记/单独成表/别名未映射）
+    """
+    raw_info: dict[str, NamePair] = {}
+    for p in raw_punches:
+        nm = mapper.normalize(p.name)
+        pair = raw_info.setdefault(nm, NamePair(name=nm, in_raw=True, in_attend=nm in attend_names))
+        pair.emp_ids.append(p.emp_id)
+        pair.depts.append(p.dept)
+    for nm in attend_names:
+        if nm not in raw_info:
+            raw_info[nm] = NamePair(name=nm, in_raw=False, in_attend=True)
+    return sorted(raw_info.values(), key=lambda x: (x.status != "已配对", x.name))
