@@ -1,0 +1,11 @@
+{
+  "period": {
+    "start": "2026-07-21",
+    "end": "2026-08-20"
+  },
+  "raw_file": "原始记录表(20260721-20260820).xlsx",
+  "attend_file": "721-820机场项目考勤.xlsx",
+  "main_sheet": "考勤表721-820",
+  "output_dir": "output",
+  "name_alias_file": "aliases.json"
+}
