@@ -2,8 +2,11 @@
 """核心逻辑单元测试（不依赖真实数据文件）。"""
 
 import unittest
+from datetime import date, datetime
 
+from attend_check.loader import AttendanceTable, DayRecord, MonthTotals
 from attend_check.name_map import NameMapper, to_simplified
+from attend_check.rules import check_presence, check_totals
 
 
 class TestNameMap(unittest.TestCase):
@@ -53,6 +56,63 @@ class TestNameMap(unittest.TestCase):
         m = NameMapper()
         hits = m.suggest_match("陈晓东", ["陳曉東", "陈晓东"])
         self.assertEqual(hits, [])  # 两者归一化后相同 -> 无需建议
+
+
+class TestWeekendRules(unittest.TestCase):
+    """周末考勤规则：周一~周五全天、周六半天、周日休息。"""
+
+    def _mk(self):
+        t = AttendanceTable(date(2026, 8, 1), date(2026, 8, 31))
+        t.date_cols = {4: date(2026, 8, 8), 5: date(2026, 8, 9), 6: date(2026, 8, 10)}
+        t.days["张三"] = {
+            date(2026, 8, 8): DayRecord(mark_up="√"),            # 周六半天
+            date(2026, 8, 9): DayRecord(mark_up="√", mark_down="√"),  # 周日休息日
+            date(2026, 8, 10): DayRecord(mark_up="√", mark_down="√"), # 周一
+        }
+        return t
+
+    def test_saturday_single_punch_not_missing(self):
+        """周六半天班，仅 1 次打卡不报缺卡提醒。"""
+        t = self._mk()
+        punch_idx = {"张三": {
+            date(2026, 8, 8): [datetime(2026, 8, 8, 8, 15)],   # 周六上午 1 次
+            date(2026, 8, 9): [datetime(2026, 8, 9, 8, 30)],   # 周日
+            date(2026, 8, 10): [datetime(2026, 8, 10, 8, 20)],  # 周一
+        }}
+        diffs = check_presence(punch_idx, t, NameMapper())
+        by_date = {(d.on_date, d.category) for d in diffs}
+        self.assertNotIn((date(2026, 8, 8), "缺卡提醒"), by_date)   # 周六豁免
+        self.assertIn((date(2026, 8, 10), "缺卡提醒"), by_date)     # 周一报缺卡
+        self.assertIn((date(2026, 8, 9), "周日出勤核对"), by_date)  # 周日√需佐证
+
+    def test_sunday_check_without_restday_hours(self):
+        """周日有√且无休息日上班数字 -> 周日出勤核对。"""
+        t = self._mk()
+        punch_idx = {"张三": {date(2026, 8, 9): [datetime(2026, 8, 9, 8, 30), datetime(2026, 8, 9, 17, 0)]}}
+        diffs = check_presence(punch_idx, t, NameMapper())
+        self.assertTrue(any(d.category == "周日出勤核对" for d in diffs))
+
+    def test_sunday_with_hours_ok(self):
+        """周日有休息日上班数字时，不再报周日出勤核对。"""
+        t = AttendanceTable(date(2026, 8, 1), date(2026, 8, 31))
+        t.date_cols = {5: date(2026, 8, 9)}
+        t.days["张三"] = {date(2026, 8, 9): DayRecord(mark_up="4", mark_down="4", h_up=4, h_down=4)}
+        punch_idx = {"张三": {date(2026, 8, 9): [datetime(2026, 8, 9, 8, 30), datetime(2026, 8, 9, 12, 0)]}}
+        diffs = check_presence(punch_idx, t, NameMapper())
+        self.assertFalse(any(d.category == "周日出勤核对" for d in diffs))
+
+
+class TestLeaveGrouping(unittest.TestCase):
+    """產/喪/婚 归入"其（d)"列统计。"""
+
+    def test_chan_sang_hun_into_qi(self):
+        t = AttendanceTable(date(2026, 8, 1), date(2026, 8, 31))
+        t.date_cols = {4: date(2026, 8, 3)}  # 周一
+        t.days["李四"] = {date(2026, 8, 3): DayRecord(mark_up="產", mark_down="產")}
+        t.totals["李四"] = MonthTotals(name="李四", other_d=1.0)  # 其（d)=1
+        diffs = check_totals(t)
+        # 產 标记 2 个 × 0.5 = 1 天，与月度"其"=1 一致 -> 无差异
+        self.assertEqual(diffs, [])
 
 
 if __name__ == "__main__":
