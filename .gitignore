@@ -7,12 +7,16 @@
 # ===== 打包产物与临时截图 =====
 *.zip
 error_screenshot.png
+error_missing.png
 
 # ===== 本地敏感配置（含真实姓名，不入库）=====
 aliases.json
 aliases.local.backup.json
 sensitive_replace.py
 prewrite_blobs.py
+
+# ===== 临时脚本（用后即删）=====
+build_commit.py
 
 # ===== 输出与临时文件 =====
 output/

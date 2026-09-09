@@ -58,11 +58,19 @@ def main() -> int:
     cfg = load_config(args.config)
     base = os.path.dirname(os.path.abspath(args.config))
 
-    # 输入文件目录（默认 inputfile，不存在则回退到项目根目录）
+    # 输入文件目录（默认 inputfile）
     input_dir = _cfg_get(cfg, "input_dir", default="inputfile")
     input_path = os.path.join(base, input_dir)
     if not os.path.isdir(input_path):
-        input_path = base
+        # 目录不存在：创建并明确提示，不再静默回退到项目根目录
+        os.makedirs(input_path, exist_ok=True)
+        print(f"[提示] 未找到输入目录: {input_path}")
+        print("       已自动创建该目录。请将以下源文件放入后重新运行：")
+        print("         1. 原始打卡记录（xlsx，含打卡时间列）")
+        print("         2. 手工考勤表（xlsx，含 上/下/加/夜間工作 行标签）")
+        print("         3. 单据 PDF（请假单/加班单/休假单等）")
+        print("       文件名可随意命名，程序会自动识别。")
+        return 1
 
     # ---- 读取配置 ----
     raw_file = _cfg_get(cfg, "files", "raw", default=cfg.get("raw_file", ""))
@@ -103,8 +111,25 @@ def main() -> int:
               f"考勤表={attend_file or '未找到'} | PDF={pdf_file or '无'} | "
               f"周期={period_start}~{period_end}")
 
+        # ---- 缺少文件提醒 ----
+        missing = []
+        if not raw_file:
+            missing.append("原始打卡记录")
+        if not attend_file:
+            missing.append("手工考勤表")
+        if not pdf_file:
+            missing.append("PDF 单据")
+        if missing:
+            print("[提醒] 输入目录中缺少以下源文件: " + "、".join(missing))
+            print("       请将对应文件放入 inputfile 目录后重新运行（文件名可随意，程序自动识别）")
+        # 原始记录/考勤表缺失 -> 无法对账，终止；仅缺 PDF -> 可降级运行阶段一
+        if not raw_file or not attend_file:
+            print("[错误] 缺少必要的源文件，无法执行对账。")
+            return 1
+
     if period_start is None or period_end is None:
-        print("[错误] 无法确定考勤周期，请在 config.json 中配置 period，或确保文件名包含日期")
+        print("[错误] 无法确定考勤周期")
+        print("       请在 config.json 中配置 period，或确保源文件名包含日期（如 20260721-20260820）")
         return 1
 
     out_dir = _cfg_get(cfg, "output", "dir", default=cfg.get("output_dir", "output"))

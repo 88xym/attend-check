@@ -10,6 +10,10 @@ OUT = os.path.join(ROOT, "attend-check.zip")
 EXCLUDE_DIRS = {".git", "__pycache__", "inputfile", "output", ".pytest_cache"}
 EXCLUDE_EXTS = {".xlsx", ".xls", ".pdf", ".csv", ".pyc", ".zip", ".png", ".jpg", ".jpeg"}
 EXCLUDE_PREFIXES = ("~$",)
+# 本地敏感文件（含真实姓名），不入包
+EXCLUDE_FILES = {"aliases.json", "aliases.local.backup.json", "sensitive_replace.py",
+                 "rewrite_history.py", "finalize_commit.py", "cleanup_orphans.py",
+                 "prewrite_blobs.py", "check_security.py", "gen_bat.py"}
 
 
 def should_skip(rel_path: str) -> bool:
@@ -19,6 +23,9 @@ def should_skip(rel_path: str) -> bool:
         return True
     # 排除扩展名
     if os.path.splitext(rel_path)[1].lower() in EXCLUDE_EXTS:
+        return True
+    # 排除指定文件
+    if os.path.basename(rel_path) in EXCLUDE_FILES:
         return True
     # 排除临时文件
     if os.path.basename(rel_path).startswith(EXCLUDE_PREFIXES):
