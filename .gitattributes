@@ -1,0 +1,5 @@
+# Windows 批处理必须原样 CRLF 入库：
+# - cmd 无法可靠解析 LF 行尾的 .bat（双击会闪退/解析错乱）
+# - GitHub 网页 zip 直接取 blob 原样，因此 blob 必须存 CRLF
+# - -text 关闭行尾转换，保证入库、下载、运行三者行尾一致
+*.bat -text
