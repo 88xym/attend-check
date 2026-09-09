@@ -8,7 +8,7 @@ OUT = os.path.join(ROOT, "attend-check.zip")
 
 # 排除规则
 EXCLUDE_DIRS = {".git", "__pycache__", "inputfile", "output", ".pytest_cache"}
-EXCLUDE_EXTS = {".xlsx", ".xls", ".pdf", ".csv", ".pyc", ".zip"}
+EXCLUDE_EXTS = {".xlsx", ".xls", ".pdf", ".csv", ".pyc", ".zip", ".png", ".jpg", ".jpeg"}
 EXCLUDE_PREFIXES = ("~$",)
 
 

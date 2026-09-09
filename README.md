@@ -12,7 +12,8 @@
 D:\ATTEND\
 ├── main.py                  # 入口（配置化一键运行）
 ├── config.json              # 配置（周期、文件、规则开关、OCR参数）
-├── aliases.json             # 姓名别名映射（繁简/别名归一到简体）
+├── aliases.example.json     # 姓名别名模板（脱敏示例，复制为 aliases.json 使用）
+├── aliases.json             # 姓名别名映射（本地维护，含真实姓名，不入库）
 ├── requirements.txt         # Python 依赖
 ├── attend_check/            # 核心包
 │   ├── loader.py            # 解析原始打卡记录 + 手工考勤表
@@ -130,6 +131,13 @@ python main.py
 
 原始考勤数据（xlsx/pdf）含员工个人信息，**默认不纳入 Git 版本管理**（见 `.gitignore`）。
 
+`aliases.json`（真实姓名别名映射）同样**不入库**：仓库只提供脱敏示例 `aliases.example.json`。在新电脑部署时：
+
+1. 复制 `aliases.example.json` 为 `aliases.json`
+2. 按实际需要填写别名映射（如 "部门+姓名连写" → "姓名"）
+
 ## GitHub 仓库
 
 https://github.com/88xym/attend-check（私有）
+
+仓库代码已脱敏：测试数据使用虚构姓名，不包含真实员工个人信息；源数据文件与本地别名文件均通过 `.gitignore` 排除。
